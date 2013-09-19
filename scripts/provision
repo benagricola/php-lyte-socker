@@ -1,0 +1,40 @@
+#!/bin/bash -e
+
+# internode repos ftw
+sed -i 's%http://archive.ubuntu.com/%http://mirror.internode.on.net/pub/ubuntu/%g' /etc/apt/sources.list
+
+if ! type phpunit > /dev/null 2>&1; then
+	echo "Installing phpunit"
+	apt-get update
+	apt-get install -y phpunit
+fi
+
+if ! type git > /dev/null 2>&1; then
+	echo "Installing git"
+	apt-get install -y git
+fi
+
+if ! type rvm > /dev/null 2>&1; then
+	echo "Installing RVM"
+	curl -L https://get.rvm.io | bash -s stable
+fi
+
+# make sure rvm is loaded in current shell
+source /etc/profile.d/rvm.sh
+
+if ! type bundle > /dev/null 2>&1; then
+	echo "Install bundle"
+	gem install bundle
+fi
+
+if ! dpkg -l | grep -q ruby-dev; then
+	echo Installing ruby headers
+	apt-get install -y ruby-dev
+fi
+
+if ! type make > /dev/null 2>&1; then
+	echo "Install make"
+	apt-get install -y make
+fi
+
+sudo -u vagrant -i /vagrant/scripts/provision_as_vagrant_user
