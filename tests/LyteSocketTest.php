@@ -29,11 +29,26 @@ class LyteSocketTest extends PHPUnit_Framework_TestCase {
 		$pair = LyteSocket::createPair();
 
 		$pair[0]->send("This is just some text");
-		$pair[0]->send("We don't want this text yet");
+		$pair[0]->send("We don't want this text at first");
 		$message = $pair[1]->receive();
 		$this->assertEquals('This is just some text', $message);
 		$message = $pair[1]->receive();
-		$this->assertEquals("We don't want this text yet", $message);
+		$this->assertEquals("We don't want this text at first", $message);
+	}
+
+	/**
+	 * Sockets should become ready when sent messages
+	 */
+	public function testSocketsBecomeReady() {
+		$pair = LyteSocket::createPair();
+
+		$this->assertFalse($pair[1]->ready());
+		$pair[0]->send("This is just some text");
+		for ($i = 0; $i < 100 && !$pair[1]->ready(); $i++)
+			usleep(10000);
+		$this->assertTrue($pair[1]->ready());
+
+		$this->assertEquals('This is just some text', $pair[1]->receive());
 	}
 
 	/**
@@ -41,9 +56,16 @@ class LyteSocketTest extends PHPUnit_Framework_TestCase {
 	 */
 	public function testSelect() {
 		$pair = LyteSocket::createPair();
-		$pair[0]->send("Test");
+		$pair[0]->send("Foo");
 
 		$ready = LyteSocket::select($pair);
-		$this->assertEquals(1, $ready, 'one socket should be ready');
+		$this->assertEquals(array(1), $ready, 'socket one should be ready');
+
+		$pair[1]->send("Bar");
+		$ready = LyteSocket::select($pair);
+		$this->assertEquals(array(0, 1), $ready, 'both sockets should be ready');
+
+		$this->assertEquals('Foo', $pair[1]->receive());
+		$this->assertEquals('Bar', $pair[0]->receive());
 	}
 }

@@ -24,3 +24,11 @@ $pair[0]->send("Any arbitrary length message");
 // Get back exactly one message:
 $message = $pair[1]->receive();
 ```
+
+## Select over an array of sockets
+
+```php
+foreach (LyteSocket::select($sockets) as $i) {
+	echo "Got message from $i:".$sockets[$i]->receive();
+}
+```

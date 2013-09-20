@@ -1,5 +1,23 @@
 <?php
 class LyteSocket {
+
+	/**
+	 * A message we've already ready off the read buffer that's just waiting for
+	 * receive() to be called
+	 */
+	protected $_message = null;
+
+	/**
+	 * Stuff we've read off the socket but not yet aligned in to any
+	 * kind of message boundaries
+	 */
+	protected $_readBuffer = '';
+
+	/**
+	 * The raw php socket we're working over
+	 */
+	protected $_socket;
+
 	/**
 	 * Create a pair of sockets
 	 *
@@ -24,7 +42,6 @@ class LyteSocket {
 	 */
 	public function __construct(&$socket) {
 		$this->_socket =& $socket;
-		$this->_readBuffer = '';
 	}
 
 	/**
@@ -46,29 +63,20 @@ class LyteSocket {
 	/**
 	 * Get the next string off of the socket
 	 *
+	 * Will block if not ready
+	 *
 	 * @return string Full message from socket
 	 */
 	public function receive() {
-		// while the read buffer is empty or doesn't contain an integer followed by a newline
-		while (strlen($this->_readBuffer) == 0 || !preg_match('%^([0-9]+)\n%', $this->_readBuffer, $match))
+		// try to just buffer
+		while (!$this->ready()) {
+			socket_set_block($this->_socket);
 			$this->_readBuffer .= socket_read($this->_socket, 1024, PHP_BINARY_READ);
+		}
 
-		// now we should know how many bytes the message will be
-		$bytes = $match[1];
-
-		// remove byte identifier from buffer
-		$this->_readBuffer = substr($this->_readBuffer, strlen($bytes)+1);
-
-		while (strlen($this->_readBuffer) < $bytes)
-			$this->_readBuffer .= socket_read($this->_socket, 1024, PHP_BINARY_READ);
-
-		// just grab our message out of the stream
-		$data = substr($this->_readBuffer, 0, $bytes);
-
-		// remove message from buffer
-		$this->_readBuffer = substr($this->_readBuffer, $bytes);
-
-		return $data;
+		$message = $this->_message;
+		$this->_message = null;
+		return $message;
 	}
 
 	/**
@@ -78,13 +86,73 @@ class LyteSocket {
 	 *
 	 * @return array keys of sockets ready to read from
 	 */
-	public static function select($reads, $writes = array(), $excepts = array()) {
+	public static function select($reads) {
 		$rawReads = array();
 		$rawWrites = array();
 		$rawExcepts = array();
 		foreach ($reads as &$read) $rawReads []=& $read->_socket;
-		foreach ($writes as &$write) $rawWrites []=& $write->_socket;
-		foreach ($excepts as &$except) $rawExcepts []=& $except->_socket;
-		return socket_select($rawReads, $rawWrites, $rawExcepts, null);
+
+		$ready = self::_checkReady($reads);
+		while (empty($ready)) {
+			socket_select($rawReads, $rawWrites, $rawExcepts, null);
+		}
+
+		return $ready;
+	}
+
+	/**
+	 * Check an array of sockets to see if any are ready
+	 *
+	 * @param array $sockets
+	 *
+	 * @return array keys of sockets that are ready
+	 */
+	protected static function _checkReady(&$sockets) {
+		$ready = array();
+		foreach ($sockets as $key => &$socket)
+			if ($socket->ready())
+				$ready []= $key;
+		return $ready;
+	}
+
+	/**
+	 * See whether this socket is ready to be ready from yet or not
+	 *
+	 * @return bool
+	 */
+	public function ready() {
+		$this->_buffer();
+		return !is_null($this->_message);
+	}
+
+	/**
+	 * Buffer stuff off the socket until we run out of data
+	 * or we have a full message in $this->_message
+	 */
+	protected function _buffer() {
+		socket_set_nonblock($this->_socket);
+		while ($data = socket_read($this->_socket, 1024, PHP_BINARY_READ)) {
+			if ($data == '') break; // EOF
+			$this->_readBuffer .= $data;
+		}
+
+		$this->_storeMessage();
+	}
+
+	/**
+	 * Store the message on the $_readBuffer if there's enough data
+	 */
+	protected function _storeMessage() {
+		// if we have the byte count for the next message
+		if (preg_match('%^([0-9]+)\n%', $this->_readBuffer, $match)) {
+			$bytes = $match[1];
+			// if we have enough data for the message
+			if (strlen($this->_readBuffer) >= strlen($bytes) + 1 + $bytes) {
+				// store it
+				$this->_message = substr($this->_readBuffer, strlen($bytes)+1, $bytes);
+				// remove from buffer
+				$this->_readBuffer = substr($this->_readBuffer, strlen($bytes)+1+$bytes);
+			}
+		}
 	}
 }
