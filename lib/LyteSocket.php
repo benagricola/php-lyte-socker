@@ -45,6 +45,65 @@ class LyteSocket {
 	}
 
 	/**
+	 * Create a new socket by specifying the type
+	 *
+	 * See: http://php.net/socket_create
+	 */
+	public static function create($domain, $type, $protocol) {
+		$socket = socket_create($domain, $type, $protocol);
+		return new LyteSocket($socket);
+	}
+
+	/**
+	 * Bind a LyteSocket to a given address
+	 *
+	 * @param string $address
+	 * @param int $port optional port
+	 */
+	public function bind($address, $port = 0) {
+		return socket_bind($this->_socket, $address, $port);
+	}
+
+	/**
+	 * Close the underlying socket
+	 */
+	public function close() {
+		socket_close($this->_socket);
+	}
+
+	/**
+	 * After a connection has been bound it can start listening
+	 */
+	public function listen() {
+		return socket_listen($this->_socket);
+	}
+
+	/**
+	 * Accept connections from a listening socket and returns
+	 * the new connection as a new LyteSocket
+	 */
+	public function accept() {
+		$sock = socket_accept($this->_socket);
+		return new LyteSocket($sock);
+	}
+
+	/**
+	 * Connect a socket
+	 */
+	public function connect($address, $port = 0) {
+		return socket_connect($this->_socket, $address, $port);
+	}
+
+	/**
+	 * Get socket name info
+	 *
+	 * See: http://php.net/manual/en/function.socket-getsockname.php
+	 */
+	public function getSockName(&$addr, &$port = 0) {
+		return socket_getsockname($this->_socket, $addr, $port);
+	}
+
+	/**
 	 * Send a string over the socket
 	 *
 	 * @param string $data 
