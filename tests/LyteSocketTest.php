@@ -108,4 +108,17 @@ class LyteSocketTest extends PHPUnit_Framework_TestCase {
 			exit;
 		}
 	}
+
+	/**
+	 * We expect to get an Exception if we try to receive from a socket
+	 * that's had the other end closed
+	 *
+	 * @expectedException LyteSocketException
+	 * @expectedExceptionMessage No data
+	 */
+	public function testReceivingFromRemotelyClosed() {
+		$pair = LyteSocket::createPair();
+		$pair[1]->close();
+		$pair[0]->receive();
+	}
 }

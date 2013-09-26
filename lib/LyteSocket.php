@@ -130,7 +130,21 @@ class LyteSocket {
 		// try to just buffer
 		while (!$this->ready()) {
 			socket_set_block($this->_socket);
-			$this->_readBuffer .= socket_read($this->_socket, 1024, PHP_BINARY_READ);
+			socket_clear_error($this->_socket);
+			$data = socket_read($this->_socket, 1024, PHP_BINARY_READ);
+			$err = socket_last_error($this->_socket);
+			if ($err) {
+				socket_clear_error($this->_socket);
+				throw new LyteSocketException(socket_strerror($err));
+			}
+
+			// we've read in blocking mode, if we've got back no data
+			// it's because we're attached to something that's gone wrong
+			if (empty($data)) {
+				throw new LyteSocketException("No data");
+			}
+
+			$this->_readBuffer .= $data;
 		}
 
 		$message = $this->_message;
@@ -190,7 +204,14 @@ class LyteSocket {
 	 */
 	protected function _buffer() {
 		socket_set_nonblock($this->_socket);
+		socket_clear_error($this->_socket);
 		while ($data = socket_read($this->_socket, 1024, PHP_BINARY_READ)) {
+			$err = socket_last_error($this->_socket);
+			if ($err) {
+				socket_clear_error($this->_socket);
+				throw new LyteSocketException(socket_strerror($err));
+			}
+
 			if ($data == '') break; // EOF
 			$this->_readBuffer .= $data;
 		}
@@ -215,3 +236,10 @@ class LyteSocket {
 		}
 	}
 }
+
+/**
+ * LyteSocketException
+ *
+ * Wraps up lower level socket errors in to exception form
+ */
+class LyteSocketException extends Exception {}
