@@ -110,13 +110,47 @@ class LyteSocket {
 	 */
 	public function send($data) {
 		$bytes = strlen($data); // yes, strlen is actually in bytes
-	
+
 		// stupidly simplistic "protocol":
 		// write a line with the number of bytes we're about to send as an ascii represented int
 		// write data
 		// done.
-		socket_write($this->_socket, $bytes."\n");
-		socket_write($this->_socket, $data);
+		$data = $bytes."\n".$data;
+
+		
+		$r = $e = NULL;
+		$w = array($this->_socket);
+
+		// From PHP Docs: 
+		// Sockets do not necessarily read/write the full amount of data you have requested. 
+		// Be prepared to even only be able to read/write a single byte.
+		//
+		// Read and write in a while loop and use socket_select to wait for the socket buffer
+		// to become available again.
+
+		$sent = 0;
+
+		// Attempt to send as many bytes as possible
+		while($sent = socket_write($this->_socket,$data,$bytes)) {
+			//If we've sent all of our buffer, then break the loop - we're done
+			if($sent >= $bytes)
+				break;
+
+			// Otherwise get rid of the data we did send and use select to wait for the
+			// socket to become ready to write to again.
+			$data = substr($data, $sent);
+			$bytes -= $sent;
+			socket_select($r,$w,$e,NULL,NULL); // Wait indefinitely if required
+		}
+
+		// If $sent is false, we probably had an error writing.
+		if($sent === False) {
+			$err = socket_last_error($this->_socket);
+			if ($err) {
+				socket_clear_error($this->_socket);
+				throw new LyteSocketException(socket_strerror($err));
+			}
+		} 
 	}
 
 	/**
